@@ -1,58 +1,87 @@
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
 import os
 
-from flask import Flask
-from flask import render_template
-from flask import request
-from flask import redirect
-from flask_sqlalchemy import SQLAlchemy
-
-project_dir = os.path.dirname(os.path.abspath(__file__))
-database_file = "sqlite:///{}".format(os.path.join(project_dir, "bookdatabase.db"))
-
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = database_file
-
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'crud.sqlite')
 db = SQLAlchemy(app)
+ma = Marshmallow(app)
 
-class Book(db.Model):
-    title = db.Column(db.String(80), unique=True, nullable=False, primary_key=True)
 
-    def __repr__(self):
-        return "<Title: {}>".format(self.title)
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True)
+    email = db.Column(db.String(120), unique=True)
 
-@app.route("/", methods=["GET", "POST"])
-@app.route('/', methods=["GET", "POST"])
-def home():
-    books = None
-    if request.form:
-        try:
-            book = Book(title=request.form.get("title"))
-            db.session.add(book)
-            db.session.commit()
-        except Exception as e:
-            print("Failed to add book")
-            print(e)
-    books = Book.query.all()
-    return render_template("home.html", books=books)
+    def __init__(self, username, email):
+        self.username = username
+        self.email = email
 
-@app.route("/update", methods=["POST"])
-def update():
-    try:
-        newtitle = request.form.get("newtitle")
-        oldtitle = request.form.get("oldtitle")
-        book = Book.query.filter_by(title=oldtitle).first()
-        book.title = newtitle
-        db.session.commit()
-    except Exception as e:
-        print("Couldn't update book title")
-        print(e)
-    return redirect("/")
-@app.route("/delete", methods=["POST"])
-def delete():
-    title = request.form.get("title")
-    book = Book.query.filter_by(title=title).first()
-    db.session.delete(book)
+
+class UserSchema(ma.Schema):
+    class Meta:
+        # Fields to expose
+        fields = ('username', 'email')
+
+
+user_schema = UserSchema()
+users_schema = UserSchema(many=True)
+
+
+# endpoint to create new user
+@app.route("/user", methods=["POST"])
+def add_user():
+    username = request.json['username']
+    email = request.json['email']
+    
+    new_user = User(username, email)
+
+    db.session.add(new_user)
     db.session.commit()
-    return redirect("/")
-if __name__ == "__main__":
+
+    return jsonify(new_user)
+
+
+# endpoint to show all users
+@app.route("/user", methods=["GET"])
+def get_user():
+    all_users = User.query.all()
+    result = users_schema.dump(all_users)
+    return jsonify(result.data)
+
+
+# endpoint to get user detail by id
+@app.route("/user/<id>", methods=["GET"])
+def user_detail(id):
+    user = User.query.get(id)
+    return user_schema.jsonify(user)
+
+
+# endpoint to update user
+@app.route("/user/<id>", methods=["PUT"])
+def user_update(id):
+    user = User.query.get(id)
+    username = request.json['username']
+    email = request.json['email']
+
+    user.email = email
+    user.username = username
+
+    db.session.commit()
+    return user_schema.jsonify(user)
+
+
+# endpoint to delete user
+@app.route("/user/<id>", methods=["DELETE"])
+def user_delete(id):
+    user = User.query.get(id)
+    db.session.delete(user)
+    db.session.commit()
+
+    return user_schema.jsonify(user)
+
+
+if __name__ == '__main__':
     app.run(debug=True)
