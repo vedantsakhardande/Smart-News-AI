@@ -27,7 +27,7 @@ class ScreenshotPipeline(object):
         url_hash = hashlib.md5(url.encode("utf8")).hexdigest()
         photo = "{}.png".format(url_hash)
         with open(photo, "wb") as f:
-            f.write(response.body)
+            f.write(response.body)res
         # Store filename in item.
         item["screenshot_filename"] = photo
         return item
